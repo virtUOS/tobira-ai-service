@@ -47,7 +47,7 @@ function getEnvVarAsBoolean(key: string, defaultValue: boolean): boolean {
 export const config: Config = {
   openai: {
     apiKey: getEnvVar('OPENAI_API_KEY'),
-    defaultModel: getEnvVar('DEFAULT_MODEL', 'gpt-5.1'),
+    defaultModel: getEnvVar('DEFAULT_MODEL', 'gpt-5.2'),
     maxTranscriptLength: getEnvVarAsNumber('MAX_TRANSCRIPT_LENGTH', 1600000),
   },
   database: {

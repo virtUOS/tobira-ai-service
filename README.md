@@ -124,7 +124,7 @@ The service runs on `http://localhost:3001`
 | `REDIS_HOST` | localhost | Redis host |
 | `REDIS_PORT` | 6379 | Redis port |
 | `PORT` | 3001 | Service port |
-| `DEFAULT_MODEL` | gpt-4o | OpenAI model |
+| `DEFAULT_MODEL` | gpt-5.2 | OpenAI model |
 | `CACHE_TTL_SECONDS` | 3600 | Cache duration |
 
 ### Database Configuration

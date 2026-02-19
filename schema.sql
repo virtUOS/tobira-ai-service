@@ -143,7 +143,7 @@ INSERT INTO ai_config (key, value, description) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO ai_config (key, value, description) VALUES
-    ('default_model', '"gpt-4o"', 'Default OpenAI model for generation')
+    ('default_model', '"gpt-5.2"', 'Default OpenAI model for generation')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO ai_config (key, value, description) VALUES
