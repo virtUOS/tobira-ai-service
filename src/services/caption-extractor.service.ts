@@ -180,7 +180,7 @@ export class CaptionExtractorService {
                         success: true,
                         transcriptLength: parsed.fullText.length,
                         source: 'captions_array'
-                    };language
+                    };
                 }
             }
 
