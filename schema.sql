@@ -1,5 +1,13 @@
 -- Tobira AI Service Database Schema
 -- Run this in your Tobira PostgreSQL database
+--
+-- Migration note: if upgrading an existing installation where event_id columns
+-- were created as INTEGER, run the following before applying other changes:
+--   ALTER TABLE video_transcripts   ALTER COLUMN event_id TYPE BIGINT;
+--   ALTER TABLE ai_summaries        ALTER COLUMN event_id TYPE BIGINT;
+--   ALTER TABLE ai_quizzes          ALTER COLUMN event_id TYPE BIGINT;
+--   ALTER TABLE ai_content_flags    ALTER COLUMN event_id  TYPE BIGINT;
+--   ALTER TABLE ai_content_flags    ALTER COLUMN content_id TYPE BIGINT;
 
 -- Configuration table for AI features
 CREATE TABLE IF NOT EXISTS ai_config (
@@ -12,7 +20,7 @@ CREATE TABLE IF NOT EXISTS ai_config (
 -- Video transcripts table
 CREATE TABLE IF NOT EXISTS video_transcripts (
     id SERIAL PRIMARY KEY,
-    event_id INTEGER NOT NULL,
+    event_id BIGINT NOT NULL,
     language VARCHAR(10) NOT NULL DEFAULT 'en',
     content TEXT NOT NULL,
     source VARCHAR(50) DEFAULT 'unknown',
@@ -24,7 +32,7 @@ CREATE TABLE IF NOT EXISTS video_transcripts (
 -- AI-generated summaries table
 CREATE TABLE IF NOT EXISTS ai_summaries (
     id SERIAL PRIMARY KEY,
-    event_id INTEGER NOT NULL,
+    event_id BIGINT NOT NULL,
     language VARCHAR(10) NOT NULL DEFAULT 'en',
     summary TEXT NOT NULL,
     model VARCHAR(50) NOT NULL,
@@ -44,7 +52,7 @@ CREATE TABLE IF NOT EXISTS ai_summaries (
 -- AI-generated quizzes table
 CREATE TABLE IF NOT EXISTS ai_quizzes (
     id SERIAL PRIMARY KEY,
-    event_id INTEGER NOT NULL,
+    event_id BIGINT NOT NULL,
     language VARCHAR(10) NOT NULL DEFAULT 'en',
     quiz_data JSONB NOT NULL,
     model VARCHAR(50) NOT NULL,
@@ -65,8 +73,8 @@ CREATE TABLE IF NOT EXISTS ai_quizzes (
 CREATE TABLE IF NOT EXISTS ai_content_flags (
     id SERIAL PRIMARY KEY,
     content_type VARCHAR(20) NOT NULL, -- 'summary' or 'quiz'
-    content_id INTEGER NOT NULL,
-    event_id INTEGER NOT NULL,
+    content_id BIGINT NOT NULL,
+    event_id BIGINT NOT NULL,
     username TEXT,
     reason TEXT,
     status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'resolved', 'dismissed'
