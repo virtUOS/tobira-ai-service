@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { CacheService } from './cache.service';
+import { logger } from '../utils/monitoring';
 
 export interface CumulativeQuiz {
   eventId: string;
@@ -49,13 +50,13 @@ export class CumulativeQuizService {
   ): Promise<CumulativeQuiz> {
     const startTime = Date.now();
     
-    console.log(`Generating cumulative quiz for event ${eventId}, language: ${language}`);
+    logger.info(`Generating cumulative quiz for event ${eventId}`, { language });
     
     // 1. Check cache first (unless force regenerate)
     if (!forceRegenerate) {
       const cached = await this.getCachedQuiz(eventId, language);
       if (cached && await this.isCacheValid(cached)) {
-        console.log(`Using cached cumulative quiz for event ${eventId}`);
+        logger.info(`Using cached cumulative quiz for event ${eventId}`);
         return cached;
       }
     }
@@ -75,12 +76,12 @@ export class CumulativeQuizService {
     const event = eventResult.rows[0];
     const seriesId = event.series;
     
-    console.log(`Event ${eventId} is part of series ${seriesId}`);
+    logger.info(`Event ${eventId} is part of series ${seriesId}`);
     
     // 3. Get all events in series up to and including this one (chronologically ordered)
     const seriesEvents = await this.getSeriesEventsUpTo(seriesId, eventId);
     
-    console.log(`Found ${seriesEvents.length} events in series up to event ${eventId}`);
+    logger.info(`Found ${seriesEvents.length} events in series up to event ${eventId}`);
     
     if (seriesEvents.length === 0) {
       throw new Error('No events found in series');
@@ -91,12 +92,12 @@ export class CumulativeQuizService {
       seriesEvents.map(e => this.getOrGenerateIndividualQuiz(e.id, language))
     );
     
-    console.log(`Retrieved/generated ${individualQuizzes.length} individual quizzes`);
+    logger.info(`Retrieved ${individualQuizzes.length} individual quizzes`);
     
     // 5. Combine quizzes with video context
     const questions = this.combineQuizzes(individualQuizzes, seriesEvents);
     
-    console.log(`Combined ${questions.length} total questions from ${seriesEvents.length} videos`);
+    logger.info(`Combined ${questions.length} questions from ${seriesEvents.length} videos`);
     
     // 6. Save cumulative quiz to database
     const quiz: CumulativeQuiz = {
@@ -112,7 +113,7 @@ export class CumulativeQuizService {
     
     await this.saveCumulativeQuiz(quiz);
     
-    console.log(`Cumulative quiz generated and saved in ${quiz.processingTimeMs}ms`);
+    logger.info(`Cumulative quiz saved in ${quiz.processingTimeMs}ms`, { eventId, seriesId });
     
     return quiz;
   }
@@ -188,7 +189,7 @@ export class CumulativeQuizService {
     // Quiz doesn't exist - would need to generate it
     // For now, return empty questions array
     // In production, you'd call the OpenAI service here
-    console.warn(`No quiz found for event ${eventId}, language ${language}`);
+    logger.warn(`No quiz found for event ${eventId}, language ${language}`);
     return {
       eventId,
       questions: []
@@ -216,7 +217,7 @@ export class CumulativeQuizService {
           
           // Skip questions without a correct answer
           if (correctAnswer === undefined) {
-            console.warn(`Question missing correct_answer, skipping:`, q.question);
+            logger.warn('Question missing correct_answer, skipping', { question: q.question });
             return;
           }
           
@@ -245,31 +246,23 @@ export class CumulativeQuizService {
    * Save cumulative quiz to database
    */
   private async saveCumulativeQuiz(quiz: CumulativeQuiz): Promise<void> {
+    const query = `
+      INSERT INTO ai_cumulative_quizzes (
+        event_id, series_id, language, model, processing_time_ms,
+        questions, included_event_ids, video_count
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (event_id, language)
+      DO UPDATE SET
+        questions = EXCLUDED.questions,
+        included_event_ids = EXCLUDED.included_event_ids,
+        video_count = EXCLUDED.video_count,
+        processing_time_ms = EXCLUDED.processing_time_ms,
+        updated_at = now()
+      RETURNING id
+    `;
+
     try {
-      const query = `
-        INSERT INTO ai_cumulative_quizzes (
-          event_id, series_id, language, model, processing_time_ms,
-          questions, included_event_ids, video_count
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (event_id, language)
-        DO UPDATE SET
-          questions = EXCLUDED.questions,
-          included_event_ids = EXCLUDED.included_event_ids,
-          video_count = EXCLUDED.video_count,
-          processing_time_ms = EXCLUDED.processing_time_ms,
-          updated_at = now()
-        RETURNING id
-      `;
-      
-      console.log(`[DEBUG] saveCumulativeQuiz CALLED`);
-      console.log(`[DEBUG] Parameters: eventId=${quiz.eventId}, seriesId=${quiz.seriesId}, language=${quiz.language}`);
-      console.log(`[DEBUG] Questions count: ${quiz.questions.length}`);
-      console.log(`[DEBUG] Included event IDs: ${quiz.includedEventIds}`);
-      console.log(`[DEBUG] Video count: ${quiz.videoCount}`);
-      
-      console.log(`[DEBUG] About to execute INSERT query...`);
-      
-      const result = await this.pool.query(query, [
+      await this.pool.query(query, [
         quiz.eventId,
         quiz.seriesId,
         quiz.language,
@@ -279,22 +272,16 @@ export class CumulativeQuizService {
         quiz.includedEventIds,
         quiz.videoCount
       ]);
-      
-      console.log(`[DEBUG] Database INSERT completed successfully`);
-      console.log(`[DEBUG] Returned ID: ${result.rows[0]?.id}`);
-      console.log(`[DEBUG] Rows affected: ${result.rowCount}`);
-      
-      // Cache the result
+
       const cacheKey = `cumulative_quiz:${quiz.eventId}:${quiz.language}`;
-      console.log(`[DEBUG] About to cache with key: ${cacheKey}`);
       await this.cache.set(cacheKey, quiz, 604800); // 7 days TTL
-      
-      console.log(`[DEBUG] Successfully cached cumulative quiz`);
     } catch (error: any) {
-      console.error(`[ERROR] saveCumulativeQuiz FAILED:`, error);
-      console.error(`[ERROR] Error name: ${error.name}`);
-      console.error(`[ERROR] Error message: ${error.message}`);
-      console.error(`[ERROR] Error stack:`, error.stack);
+      logger.error('Failed to save cumulative quiz', {
+        eventId: quiz.eventId,
+        seriesId: quiz.seriesId,
+        language: quiz.language,
+        error: error.message,
+      });
       throw error;
     }
   }
@@ -363,12 +350,12 @@ export class CumulativeQuizService {
       const isValid = JSON.stringify(currentEventIds) === JSON.stringify(cachedEventIds);
       
       if (!isValid) {
-        console.log(`Cache invalid for event ${quiz.eventId} - series structure changed`);
+        logger.info(`Cache invalid for event ${quiz.eventId} - series structure changed`);
       }
       
       return isValid;
     } catch (error) {
-      console.error('Error validating cache:', error);
+      logger.error('Error validating cumulative quiz cache:', error);
       return false; // Invalidate cache on error
     }
   }
@@ -561,7 +548,7 @@ export class CumulativeQuizService {
       };
       
     } catch (error: any) {
-      console.error('Error checking cumulative quiz eligibility:', error);
+      logger.error('Error checking cumulative quiz eligibility:', error);
       return {
         eligible: false,
         reason: `Error checking eligibility: ${error.message}`
