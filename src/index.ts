@@ -314,9 +314,18 @@ app.post('/api/summaries/generate/:eventId', async (req: Request, res: Response)
       result.processingTime
     );
 
-    // Cache the summary
+    // Cache the summary (store full response object for consistent cache reads)
     const cacheKey = CacheService.summaryKey(eventId, language);
-    await cache.set(cacheKey, result.content);
+    await cache.set(cacheKey, {
+      summary: result.content,
+      model: result.model,
+      createdAt: new Date().toISOString(),
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+      editedByHuman: false,
+      lastEditedBy: null,
+    });
 
     res.json({
       eventId,
@@ -354,16 +363,15 @@ app.get('/api/summaries/:eventId', async (req: Request, res: Response) => {
     const cacheKey = CacheService.summaryKey(eventId, language);
     const cached = await cache.get<string>(cacheKey);
     
-    // Don't use cache for metadata - always fetch from DB to get approval status
-    // if (cached) {
-    //   res.set('X-Cache-Hit', 'true');
-    //   return res.json({
-    //     eventId,
-    //     language,
-    //     summary: cached,
-    //     cached: true,
-    //   });
-    // }
+    if (cached) {
+      res.set('X-Cache-Hit', 'true');
+      return res.json({
+        eventId,
+        language,
+        ...cached,
+        cached: true,
+      });
+    }
 
     const result = await db.query(
       'SELECT summary, model, created_at, approved, approved_at, approved_by, edited_by_human, last_edited_by FROM ai_summaries WHERE event_id = $1 AND language = $2',
@@ -382,7 +390,16 @@ app.get('/api/summaries/:eventId', async (req: Request, res: Response) => {
     const summary = result.rows[0];
 
     // Cache for future requests
-    await cache.set(cacheKey, summary.summary);
+    await cache.set(cacheKey, {
+      summary: summary.summary,
+      model: summary.model,
+      createdAt: summary.created_at,
+      approved: summary.approved || false,
+      approvedAt: summary.approved_at,
+      approvedBy: summary.approved_by,
+      editedByHuman: summary.edited_by_human || false,
+      lastEditedBy: summary.last_edited_by,
+    });
     
     res.json({
       eventId,
@@ -545,8 +562,17 @@ app.post('/api/quizzes/generate/:eventId', async (req: Request, res: Response) =
       [eventId, language, JSON.stringify(result.quizData), result.model, result.processingTime]
     );
 
-    // Cache the quiz
-    await cache.set(cacheKey, result.quizData);
+    // Cache the quiz (store full response object for consistent cache reads)
+    await cache.set(cacheKey, {
+      quiz: result.quizData,
+      model: result.model,
+      createdAt: new Date().toISOString(),
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+      editedByHuman: false,
+      lastEditedBy: null,
+    });
 
     res.json({
       eventId,
@@ -583,16 +609,15 @@ app.get('/api/quizzes/:eventId', async (req: Request, res: Response) => {
     const cacheKey = `quiz:${eventId}:${language}`;
     const cached = await cache.get<any>(cacheKey);
 
-    // Don't use cache for metadata - always fetch from DB to get approval status
-    // if (cached) {
-    //   res.set('X-Cache-Hit', 'true');
-    //   return res.json({
-    //     eventId,
-    //     language,
-    //     quiz: cached,
-    //     cached: true,
-    //   });
-    // }
+    if (cached) {
+      res.set('X-Cache-Hit', 'true');
+      return res.json({
+        eventId,
+        language,
+        ...cached,
+        cached: true,
+      });
+    }
 
     const result = await db.query(
       'SELECT quiz_data, model, created_at, approved, approved_at, approved_by, edited_by_human, last_edited_by FROM ai_quizzes WHERE event_id = $1 AND language = $2',
@@ -611,7 +636,16 @@ app.get('/api/quizzes/:eventId', async (req: Request, res: Response) => {
     const quiz = result.rows[0];
 
     // Cache for future requests
-    await cache.set(cacheKey, quiz.quiz_data);
+    await cache.set(cacheKey, {
+      quiz: quiz.quiz_data,
+      model: quiz.model,
+      createdAt: quiz.created_at,
+      approved: quiz.approved || false,
+      approvedAt: quiz.approved_at,
+      approvedBy: quiz.approved_by,
+      editedByHuman: quiz.edited_by_human || false,
+      lastEditedBy: quiz.last_edited_by,
+    });
 
     res.json({
       eventId,
