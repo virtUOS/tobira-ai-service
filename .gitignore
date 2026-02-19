@@ -39,3 +39,6 @@ temp/
 
 # Archive folder (development scripts and docs kept for reference)
 .archive/
+
+# Local planning docs (not for the repo)
+plans/
