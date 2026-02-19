@@ -149,17 +149,16 @@ class OpenAIService {
       let summary: string;
       let tokensUsed: number | undefined;
 
-      // Use new responses API for GPT-5.1 models
+      // Use new responses API for GPT-5.x models
       if (this.isResponsesApiModel(useModel)) {
         const result = await this.client.responses.create({
           model: useModel,
           input: prompt,
           reasoning: { effort: 'medium' },
-          text: { verbosity: 'medium' } as any, // Type assertion for SDK compatibility
-        } as any);
+        });
 
         summary = result.output_text?.trim() || '';
-        tokensUsed = undefined; // responses API doesn't provide token usage in the same way
+        tokensUsed = undefined; // responses API does not expose token usage directly
       } else {
         // Fallback to chat completions API for older models
         const response = await this.client.chat.completions.create({
@@ -216,14 +215,13 @@ class OpenAIService {
     try {
       let content: string;
 
-      // Use new responses API for GPT-5.1 models
+      // Use new responses API for GPT-5.x models
       if (this.isResponsesApiModel(useModel)) {
         const result = await this.client.responses.create({
           model: useModel,
           input: prompt,
           reasoning: { effort: 'medium' },
-          text: { verbosity: 'medium' } as any, // Type assertion for SDK compatibility
-        } as any);
+        });
 
         content = result.output_text?.trim() || '{}';
       } else {
