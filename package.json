@@ -1,6 +1,6 @@
 {
   "name": "tobira-ai-service",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI microservice for Tobira video portal - provides summarization and quiz generation",
   "main": "dist/index.js",
   "scripts": {
