@@ -12,6 +12,17 @@ import * as queueService from './services/queue.service';
 import { CumulativeQuizService } from './services/cumulative-quiz.service';
 import { normalizeLanguageCode } from './utils/language';
 
+interface CachedSummary {
+  summary: string;
+  model: string;
+  createdAt: string | Date;
+  approved: boolean;
+  approvedAt: string | Date | null;
+  approvedBy: string | null;
+  editedByHuman: boolean;
+  lastEditedBy: string | null;
+}
+
 const app = express();
 
 // Middleware
@@ -361,8 +372,8 @@ app.get('/api/summaries/:eventId', async (req: Request, res: Response) => {
 
     // Check cache first
     const cacheKey = CacheService.summaryKey(eventId, language);
-    const cached = await cache.get<string>(cacheKey);
-    
+    const cached = await cache.get<CachedSummary>(cacheKey);
+
     if (cached) {
       res.set('X-Cache-Hit', 'true');
       return res.json({
