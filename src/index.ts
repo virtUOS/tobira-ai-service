@@ -2164,18 +2164,29 @@ async function start() {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully...');
-  await queueService.closeQueues();
-  await db.close();
-  process.exit(0);
-});
+let shuttingDown = false;
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down gracefully...`);
+  try {
+    await queueService.closeQueues();
+    await db.close();
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during shutdown', err);
+    process.exit(1);
+  }
+}
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully...');
-  await queueService.closeQueues();
-  await db.close();
-  process.exit(0);
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
+
+// Surface — but don't crash on — late async errors from libraries (e.g. ioredis
+// emitting after a connection has been closed). Without this, an unhandled
+// rejection during shutdown exits the process before shutdown() can finish.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection', reason);
 });
 
 start();

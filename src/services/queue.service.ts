@@ -479,6 +479,12 @@ export async function getQueueStats() {
 
 /**
  * Graceful shutdown
+ *
+ * Order matters: BullMQ Queues/Workers/QueueEvents share the `connection`
+ * passed in initializeQueues() and internally duplicate it for blocking
+ * commands. If `connection.quit()` resolves before workers finish draining,
+ * those duplicated subscribers fire commands at a closed parent and ioredis
+ * emits an unhandled error. See issue #3.
  */
 export async function closeQueues() {
   if (!queueEnabled) {
@@ -486,18 +492,37 @@ export async function closeQueues() {
   }
 
   logger.info('Closing queues and workers...');
-  
-  const promises = [];
-  
-  if (summaryWorker) promises.push(summaryWorker.close());
-  if (quizWorker) promises.push(quizWorker.close());
-  if (captionWorker) promises.push(captionWorker.close());
-  if (summaryQueue) promises.push(summaryQueue.close());
-  if (quizQueue) promises.push(quizQueue.close());
-  if (captionQueue) promises.push(captionQueue.close());
-  if (connection) promises.push(connection.quit());
-  
-  await Promise.all(promises);
-  
+
+  // 1. Stop workers first — drains in-flight jobs and stops polling for new ones.
+  await Promise.all(
+    [summaryWorker, quizWorker, captionWorker]
+      .filter((w): w is Worker => w !== null)
+      .map((w) => w.close())
+  );
+
+  // 2. Close queues and event subscribers (each holds its own duplicated client).
+  await Promise.all(
+    [
+      summaryQueue,
+      quizQueue,
+      captionQueue,
+      summaryEvents,
+      quizEvents,
+      captionEvents,
+    ]
+      .filter((q): q is Queue | QueueEvents => q !== null)
+      .map((q) => q.close())
+  );
+
+  // 3. Tear down the shared connection last. Fall back to disconnect() if
+  //    quit() rejects (e.g. server already gone) so shutdown still completes.
+  if (connection) {
+    try {
+      await connection.quit();
+    } catch {
+      connection.disconnect();
+    }
+  }
+
   logger.info('Queues closed successfully');
 }
