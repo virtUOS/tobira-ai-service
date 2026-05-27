@@ -115,16 +115,18 @@ class OpenAIService {
   constructor() {
     this.client = new OpenAI({
       apiKey: config.openai.apiKey,
+      baseURL: config.openai.baseURL,
       timeout: config.performance.requestTimeoutMs,
     });
     this.defaultModel = config.openai.defaultModel;
   }
 
   /**
-   * Check if model uses the new responses API (GPT-5.1)
+   * Whether the configured backend should be called via the Responses API.
+   * Disable via USE_RESPONSES_API=false for vLLM and other Chat-Completions-only backends.
    */
   private isResponsesApiModel(model: string): boolean {
-    return model.startsWith('gpt-5');
+    return config.openai.useResponsesApi && model.startsWith('gpt-5');
   }
 
   /**

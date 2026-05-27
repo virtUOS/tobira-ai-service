@@ -5,8 +5,10 @@ dotenv.config();
 interface Config {
   openai: {
     apiKey: string;
+    baseURL?: string;
     defaultModel: string;
     maxTranscriptLength: number;
+    useResponsesApi: boolean;
   };
   database: {
     url: string;
@@ -33,6 +35,11 @@ function getEnvVar(key: string, defaultValue?: string): string {
   return value;
 }
 
+function getOptionalEnvVar(key: string): string | undefined {
+  const value = process.env[key];
+  return value && value.length > 0 ? value : undefined;
+}
+
 function getEnvVarAsNumber(key: string, defaultValue: number): number {
   const value = process.env[key];
   return value ? parseInt(value, 10) : defaultValue;
@@ -47,8 +54,10 @@ function getEnvVarAsBoolean(key: string, defaultValue: boolean): boolean {
 export const config: Config = {
   openai: {
     apiKey: getEnvVar('OPENAI_API_KEY'),
+    baseURL: getOptionalEnvVar('OPENAI_BASE_URL'),
     defaultModel: getEnvVar('DEFAULT_MODEL', 'gpt-5.2'),
     maxTranscriptLength: getEnvVarAsNumber('MAX_TRANSCRIPT_LENGTH', 1600000),
+    useResponsesApi: getEnvVarAsBoolean('USE_RESPONSES_API', true),
   },
   database: {
     url: getEnvVar('DATABASE_URL'),
